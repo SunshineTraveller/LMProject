@@ -1,0 +1,11 @@
+platform :ios, '10.0'
+source 'https://github.com/CocoaPods/Specs.git'
+
+target 'LMProject' do
+
+  pod 'Masonry', '~> 1.1.0'
+  pod 'AFNetworking'
+  pod 'SDWebImage'
+
+
+end
