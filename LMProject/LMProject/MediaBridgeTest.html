@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>H5 音视频状态 → Native</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 12px; background: #f5f5f7; }
+        h1 { font-size: 18px; }
+        #log { white-space: pre-wrap; font-size: 12px; background: #fff; border-radius: 8px; padding: 10px; min-height: 120px; max-height: 40vh; overflow: auto; border: 1px solid #ddd; }
+        video { width: 100%; max-height: 220px; background: #000; border-radius: 8px; }
+        .hint { color: #666; font-size: 13px; margin: 8px 0; }
+    </style>
+</head>
+<body>
+    <h1>媒体桥接测试</h1>
+    <p class="hint">在 MediaBridgeTest.html 里把 <code>VIDEO_SRC</code> 换成你的地址后重新运行。</p>
+    <video id="demoVideo" controls playsinline webkit-playsinline src=""></video>
+    <p class="hint">visibility: <span id="visLabel"></span></p>
+    <h2>事件日志（含发往原生的 payload）</h2>
+    <div id="log"></div>
+
+    <script>
+    (function () {
+        var VIDEO_SRC = 'https://static0.xesimg.com/math-demo/atms-image/2026-04-01/2794ff47-eb9d-4518-97ea-016f32b7dd8d.mp4'; // TODO: 在此填写视频 URL，例如 'https://.../demo.mp4'
+
+        function logLine(msg, payload) {
+            var el = document.getElementById('log');
+            var line = new Date().toISOString() + ' ' + msg;
+            if (payload !== undefined) {
+                line += '\n' + JSON.stringify(payload, null, 2);
+            }
+            el.textContent = line + '\n\n' + el.textContent;
+        }
+
+        function postToNative(payload) {
+            try {
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mediaPlayback) {
+                    window.webkit.messageHandlers.mediaPlayback.postMessage(payload);
+                } else {
+                    logLine('[bridge missing] would send:', payload);
+                }
+            } catch (e) {
+                logLine('postMessage error: ' + e, payload);
+            }
+        }
+
+        function updateVisibilityLabel() {
+            document.getElementById('visLabel').textContent = document.visibilityState;
+        }
+
+        function bindMedia(el, kind) {
+            if (!el || !el.tagName) return;
+            var tag = el.tagName.toLowerCase();
+            if (tag !== 'video' && tag !== 'audio') return;
+
+            ['play', 'pause', 'ended', 'error', 'volumechange'].forEach(function (evt) {
+                el.addEventListener(evt, function () {
+                    var payload = {
+                        event: evt,
+                        kind: kind,
+                        tag: tag,
+                        visibilityState: document.visibilityState,
+                        currentTime: el.currentTime,
+                        duration: el.duration,
+                        paused: el.paused,
+                        muted: el.muted
+                    };
+                    logLine('media:' + evt, payload);
+                    postToNative(payload);
+                });
+            });
+        }
+
+        function handleMediaPlayback() {
+            var videos = document.querySelectorAll('video');
+            var audios = document.querySelectorAll('audio');
+
+            videos.forEach(function (video) {
+                bindMedia(video, 'video');
+                video.addEventListener('play', function () {
+                    if (document.visibilityState === 'hidden') {
+                        video.pause();
+                        var payload = {
+                            event: 'play_blocked_hidden',
+                            kind: 'video',
+                            visibilityState: document.visibilityState
+                        };
+                        logLine('blocked play (hidden)', payload);
+                        postToNative(payload);
+                    }
+                });
+            });
+
+            audios.forEach(function (audio) {
+                bindMedia(audio, 'audio');
+                audio.addEventListener('play', function () {
+                    if (document.visibilityState === 'hidden') {
+                        audio.pause();
+                        var payload = {
+                            event: 'play_blocked_hidden',
+                            kind: 'audio',
+                            visibilityState: document.visibilityState
+                        };
+                        logLine('blocked play (hidden)', payload);
+                        postToNative(payload);
+                    }
+                });
+            });
+        }
+
+        document.addEventListener('visibilitychange', function () {
+            updateVisibilityLabel();
+            var payload = { event: 'visibilitychange', visibilityState: document.visibilityState };
+            logLine('visibilitychange', payload);
+            postToNative(payload);
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            updateVisibilityLabel();
+            var v = document.getElementById('demoVideo');
+            if (VIDEO_SRC) {
+                v.src = VIDEO_SRC;
+            }
+            handleMediaPlayback();
+            postToNative({ event: 'page_ready', visibilityState: document.visibilityState });
+        });
+    })();
+    </script>
+</body>
+</html>

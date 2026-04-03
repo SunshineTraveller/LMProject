@@ -6,6 +6,9 @@ target 'LMProject' do
   pod 'Masonry', '~> 1.1.0'
   pod 'AFNetworking'
   pod 'SDWebImage'
+  pod 'YXNetworkManager', '1.0.0'
 
+  # local
+  
 
 end
